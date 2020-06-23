@@ -2,107 +2,16 @@ package databricks
 
 import (
 	"fmt"
-	"github.com/databrickslabs/databricks-terraform/client/model"
-	"github.com/databrickslabs/databricks-terraform/client/service"
-	"sort"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/aws/aws-sdk-go/aws/arn"
+
+	"github.com/databrickslabs/databricks-terraform/client/model"
+	"github.com/databrickslabs/databricks-terraform/client/service"
 )
 
-type typeCheckerReturnString interface {
-	execute(interface{}) string
-	setNext(typeCheckerReturnString)
-}
-
-type stringChecker struct {
-	next typeCheckerReturnString
-}
-
-func (r *stringChecker) execute(p interface{}) string {
-	stringVal, ok := p.(string)
-	if ok {
-		if len(stringVal) > 0 {
-			return stringVal
-		}
-		return ""
-	}
-	return r.next.execute(p)
-}
-
-func (r *stringChecker) setNext(next typeCheckerReturnString) {
-	r.next = next
-}
-
-type intChecker struct {
-	next typeCheckerReturnString
-}
-
-func (r *intChecker) execute(p interface{}) string {
-	intVal, ok := p.(int)
-	if ok {
-		if intVal > 0 {
-			return strconv.Itoa(intVal)
-		}
-		return ""
-	}
-	return r.next.execute(p)
-}
-
-func (r *intChecker) setNext(next typeCheckerReturnString) {
-	r.next = next
-}
-
-type boolChecker struct {
-	next typeCheckerReturnString
-}
-
-func (r *boolChecker) execute(p interface{}) string {
-	boolVal, ok := p.(bool)
-	if ok {
-		return strconv.FormatBool(boolVal)
-	}
-	return r.next.execute(p)
-}
-
-func (r *boolChecker) setNext(next typeCheckerReturnString) {
-	r.next = next
-}
-
-type stringSliceChecker struct {
-	next typeCheckerReturnString
-}
-
-func (r *stringSliceChecker) execute(p interface{}) string {
-	sliceVal, ok := p.([]string)
-	if ok {
-		var stringSlice []string
-		for _, v := range sliceVal {
-			stringSlice = append(stringSlice, fetchStringFromCheckers(v))
-		}
-		sort.Strings(stringSlice)
-		return strings.Join(stringSlice, "")
-	}
-	return ""
-}
-
-func (r *stringSliceChecker) setNext(next typeCheckerReturnString) {
-	r.next = next
-}
-
-func fetchStringFromCheckers(strVal interface{}) string {
-	stringChecker := &stringChecker{}
-	intChecker := &intChecker{}
-	boolChecker := &boolChecker{}
-	sliceChecker := &stringSliceChecker{}
-	stringChecker.setNext(intChecker)
-	intChecker.setNext(boolChecker)
-	boolChecker.setNext(sliceChecker)
-
-	return stringChecker.execute(strVal)
-}
-
-func changeClusterIntoRunningState(clusterID string, client service.DBApiClient) error {
+func changeClusterIntoRunningState(clusterID string, client *service.DBApiClient) error {
 	//return nil
 	clusterInfo, err := client.Clusters().Get(clusterID)
 	if err != nil {
@@ -160,5 +69,54 @@ func changeClusterIntoRunningState(clusterID string, client service.DBApiClient)
 	}
 
 	return fmt.Errorf("cluster is in a non recoverable state: %s", currentState)
+}
 
+func isClusterMissing(errorMsg, resourceID string) bool {
+	return strings.Contains(errorMsg, "INVALID_PARAMETER_VALUE") &&
+		strings.Contains(errorMsg, fmt.Sprintf("Cluster %s does not exist", resourceID))
+}
+
+// PackagedMWSIds is a struct that contains both the MWS acct id and the ResourceId (resources are networks, creds, etc.)
+type PackagedMWSIds struct {
+	MwsAcctID  string
+	ResourceID string
+}
+
+// Helps package up MWSAccountId with another id such as credentials id or network id
+// uses format mwsAcctId/otherId
+func packMWSAccountID(idsToPackage PackagedMWSIds) string {
+	return fmt.Sprintf("%s/%s", idsToPackage.MwsAcctID, idsToPackage.ResourceID)
+}
+
+// Helps unpackage MWSAccountId from another id such as credentials id or network id
+func unpackMWSAccountID(combined string) (PackagedMWSIds, error) {
+	var packagedMWSIds PackagedMWSIds
+	parts := strings.Split(combined, "/")
+	if len(parts) != 2 {
+		return packagedMWSIds, fmt.Errorf("unpacked account has more than or less than two parts, combined id: %s", combined)
+	}
+	packagedMWSIds.MwsAcctID = parts[0]
+	packagedMWSIds.ResourceID = parts[1]
+	return packagedMWSIds, nil
+}
+
+// ValidateInstanceProfileARN is a ValidateFunc that ensures the role id is a valid aws iam instance profile arn
+func ValidateInstanceProfileARN(val interface{}, key string) (warns []string, errs []error) {
+	v := val.(string)
+
+	if v == "" {
+		return nil, []error{fmt.Errorf("%s is empty got: %s, must be an aws instance profile arn", key, v)}
+	}
+
+	// Parse and verify instance profiles
+	instanceProfileArn, err := arn.Parse(v)
+	if err != nil {
+		return nil, []error{fmt.Errorf("%s is invalid got: %s received error: %w", key, v, err)}
+	}
+	// Verify instance profile resource type, Resource gets parsed as instance-profile/<profile-name>
+	if !strings.HasPrefix(instanceProfileArn.Resource, "instance-profile") {
+		return nil, []error{fmt.Errorf("%s must be an instance profile resource, got: %s in %s",
+			key, instanceProfileArn.Resource, v)}
+	}
+	return nil, nil
 }

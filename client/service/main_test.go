@@ -1,11 +1,9 @@
 package service
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/joho/godotenv"
-	"github.com/r3labs/diff"
-	"github.com/stretchr/testify/assert"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +11,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/joho/godotenv"
+	"github.com/r3labs/diff"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMain(m *testing.M) {
@@ -44,6 +46,19 @@ func GetIntegrationDBAPIClient() *DBApiClient {
 	var config DBApiClientConfig
 	config.Token = os.Getenv("DATABRICKS_TOKEN")
 	config.Host = os.Getenv("DATABRICKS_HOST")
+	config.Setup()
+
+	var c DBApiClient
+	c.SetConfig(&config)
+	return &c
+}
+
+func GetIntegrationMWSAPIClient() *DBApiClient {
+	var config DBApiClientConfig
+	tokenUnB64 := fmt.Sprintf("%s:%s", os.Getenv("DATABRICKS_USERNAME"), os.Getenv("DATABRICKS_PASSWORD"))
+	config.AuthType = BasicAuth
+	config.Token = base64.StdEncoding.EncodeToString([]byte(tokenUnB64))
+	config.Host = os.Getenv("DATABRICKS_MWS_HOST")
 
 	var c DBApiClient
 	c.SetConfig(&config)
@@ -71,12 +86,12 @@ func AssertRequestWithMockServer(t *testing.T, rawPayloadArgs interface{}, reque
 		rw.WriteHeader(responseStatus)
 		_, err := rw.Write([]byte(response))
 		assert.NoError(t, err, err)
-
 	}))
 	// Close the server when test finishes
 	defer server.Close()
 	var config DBApiClientConfig
 	config.Host = server.URL
+	config.Setup()
 
 	var dbClient DBApiClient
 	dbClient.SetConfig(&config)
@@ -116,6 +131,7 @@ func AssertMultipleRequestsWithMockServer(t *testing.T, rawPayloadArgs interface
 	defer server.Close()
 	var config DBApiClientConfig
 	config.Host = server.URL
+	config.Setup()
 
 	var dbClient DBApiClient
 	dbClient.SetConfig(&config)

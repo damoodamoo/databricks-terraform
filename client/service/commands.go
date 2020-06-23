@@ -4,21 +4,27 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/databrickslabs/databricks-terraform/client/model"
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/databrickslabs/databricks-terraform/client/model"
 )
 
 // CommandsAPI exposes the Context & Commands API
 type CommandsAPI struct {
-	Client DBApiClient
+	Client *DBApiClient
+}
+
+// CommandExecutor creates a spark context and executes a command and then closes context
+type CommandExecutor interface {
+	Execute(clusterID, language, commandStr string) (model.Command, error)
 }
 
 // Execute creates a spark context and executes a command and then closes context
-func (a CommandsAPI) Execute(clusterID, langauge, commandStr string) (model.Command, error) {
+func (a CommandsAPI) Execute(clusterID, language, commandStr string) (model.Command, error) {
 	var resp model.Command
-	context, err := a.createContext(langauge, clusterID)
+	context, err := a.createContext(language, clusterID)
 	if err != nil {
 		return resp, err
 	}
@@ -26,7 +32,7 @@ func (a CommandsAPI) Execute(clusterID, langauge, commandStr string) (model.Comm
 	if err != nil {
 		return resp, err
 	}
-	commandID, err := a.createCommand(context, clusterID, langauge, commandStr)
+	commandID, err := a.createCommand(context, clusterID, language, commandStr)
 	if err != nil {
 		return resp, err
 	}

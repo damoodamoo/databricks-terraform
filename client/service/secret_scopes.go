@@ -3,13 +3,14 @@ package service
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/databrickslabs/databricks-terraform/client/model"
 	"net/http"
+
+	"github.com/databrickslabs/databricks-terraform/client/model"
 )
 
 // SecretScopesAPI exposes the Secret Scopes API
 type SecretScopesAPI struct {
-	Client DBApiClient
+	Client *DBApiClient
 }
 
 // Create creates a new secret scope

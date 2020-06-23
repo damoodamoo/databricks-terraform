@@ -297,6 +297,8 @@ override.tf.json
 # http://iamzed.com/2009/05/07/a-primer-on-virtualenv/
 pyvenv.cfg
 .env
+.aws.env
+.azure.env
 .venv
 env/
 venv/
@@ -305,13 +307,6 @@ env.bak/
 venv.bak/
 pip-selfcheck.json
 
-### VisualStudioCode ###
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-
 ### VisualStudioCode Patch ###
 # Ignore all local history of files
 .history
@@ -319,7 +314,6 @@ pip-selfcheck.json
 # End of https://www.gitignore.io/api/go,python,terraform,virtualenv,pycharm+iml,intellij+all,visualstudiocode
 /terraform-provider-db*
 /terraform-provider-databricks*
-/.vscode/
 
 # Remove tfvars to prevent secrets from leaking and ignore any terraform files in root folder
 **/*.tfvars
@@ -332,3 +326,7 @@ pip-selfcheck.json
 website/**/*.tar.gz
 website/**/*.zip
 website/public/**
+
+.vscode/private.env
+tf.log
+*.env

@@ -2,13 +2,14 @@ package service
 
 import (
 	"encoding/json"
-	"github.com/databrickslabs/databricks-terraform/client/model"
 	"net/http"
+
+	"github.com/databrickslabs/databricks-terraform/client/model"
 )
 
 // JobsAPI exposes the Jobs API
 type JobsAPI struct {
-	Client DBApiClient
+	Client *DBApiClient
 }
 
 // Create creates a job on the workspace given the job settings

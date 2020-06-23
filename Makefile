@@ -1,6 +1,6 @@
 default: build
 
-test:
+test: lint
 	@echo "==> Running tests..."
 	@gotestsum --format short-verbose --raw-command go test -v -json -short -coverprofile=coverage.txt ./...
 
@@ -26,45 +26,42 @@ coverage-int: int
 
 int-build: int build
 
-build: lint test fmt
+build: lint test
 	@echo "==> Building source code with go build..."
 	@go build -mod vendor -v -o terraform-provider-databricks
 
 lint:
-	@echo "==> Linting source code with golangci-lint..."
+	@echo "==> Linting source code with golangci-lint make sure you run make fmt ..."
 	@golangci-lint run --skip-dirs-use-default --timeout 5m
 
-fmt: lint
+fmt:
 	@echo "==> Formatting source code with gofmt..."
+	@goimports -w client
+	@goimports -w databricks
+	@goimports -w main.go
+	@gofmt -s -w client
+	@gofmt -s -w databricks
+	@gofmt -s -w main.go
 	@go fmt ./...
-
-
-python-setup:
-	@echo "==> Setting up virtual env and installing python libraries..."
-	@python -m pip install virtualenv
-	@cd docs && python -m virtualenv venv
-	@cd docs && source venv/bin/activate && python -m pip install -r requirements.txt
-
-docs: python-setup
-	@echo "==> Building Docs ..."
-	@cd docs && source venv/bin/activate && make clean && make html
-
-opendocs: python-setup docs
-	@echo "==> Opening Docs ..."
-	@cd docs && open build/html/index.html
-
-singlehtmldocs: python-setup
-	@echo "==> Building Docs ..."
-	@cd docs && source venv/bin/activate && make clean && make singlehtml
 
 vendor:
 	@echo "==> Filling vendor folder with library code..."
 	@go mod vendor
 
-# INTEGRATION TESTING WITH TERRAFORM EXAMPLES
-terraform-acc: fmt build
-	@echo "==> Running Terraform Acceptance Tests..."
-	@TF_ACC=1 gotestsum --format short-verbose --raw-command go test -v -json -short -coverprofile=coverage.out ./...
+# INTEGRATION TESTING WITH AZURE
+terraform-acc-azure: lint
+	@echo "==> Running Terraform Acceptance Tests for Azure..."
+	@CLOUD_ENV="azure" TF_ACC=1 gotestsum --format short-verbose --raw-command go test -v -json -tags=azure  -short -coverprofile=coverage.out ./...
+
+# INTEGRATION TESTING WITH AWS
+terraform-acc-aws: lint
+	@echo "==> Running Terraform Acceptance Tests for AWS..."
+	@CLOUD_ENV="aws" TF_ACC=1 gotestsum --format short-verbose --raw-command go test -v -json -short -coverprofile=coverage.out -run 'TestAccAws' ./...
+
+# INTEGRATION TESTING WITH AWS
+terraform-acc-mws: lint
+	@echo "==> Running Terraform Acceptance Tests for Multiple Workspace APIs on AWS..."
+	@/bin/bash integration-environment-mws/run.sh
 
 terraform-setup: build
 	@echo "==> Initializing Terraform..."

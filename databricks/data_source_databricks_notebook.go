@@ -12,12 +12,12 @@ func dataSourceNotebook() *schema.Resource {
 		Read: dataSourceNotebookRead,
 		Schema: map[string]*schema.Schema{
 
-			"path": &schema.Schema{
+			"path": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
 			},
-			"format": &schema.Schema{
+			"format": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
@@ -27,19 +27,19 @@ func dataSourceNotebook() *schema.Resource {
 					string(model.HTML),
 				}, false),
 			},
-			"content": &schema.Schema{
+			"content": {
 				Type:     schema.TypeString,
 				Computed: true,
 			},
-			"language": &schema.Schema{
+			"language": {
 				Type:     schema.TypeString,
 				Computed: true,
 			},
-			"object_type": &schema.Schema{
+			"object_type": {
 				Type:     schema.TypeString,
 				Computed: true,
 			},
-			"object_id": &schema.Schema{
+			"object_id": {
 				Type:     schema.TypeInt,
 				Computed: true,
 			},
@@ -50,7 +50,7 @@ func dataSourceNotebook() *schema.Resource {
 func dataSourceNotebookRead(d *schema.ResourceData, m interface{}) error {
 	path := d.Get("path").(string)
 	format := d.Get("format").(string)
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 
 	notebookInfo, err := client.Notebooks().Read(path)
 	if err != nil {

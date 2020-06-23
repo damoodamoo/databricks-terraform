@@ -2,10 +2,11 @@ package databricks
 
 import (
 	"fmt"
-	"github.com/databrickslabs/databricks-terraform/client/service"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 	"log"
 	"strings"
+
+	"github.com/databrickslabs/databricks-terraform/client/service"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
 
 func resourceInstanceProfile() *schema.Resource {
@@ -15,12 +16,12 @@ func resourceInstanceProfile() *schema.Resource {
 		Delete: resourceInstanceProfileDelete,
 
 		Schema: map[string]*schema.Schema{
-			"instance_profile_arn": &schema.Schema{
+			"instance_profile_arn": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
 			},
-			"skip_validation": &schema.Schema{
+			"skip_validation": {
 				Type:     schema.TypeBool,
 				Required: true,
 				ForceNew: true,
@@ -30,7 +31,7 @@ func resourceInstanceProfile() *schema.Resource {
 }
 
 func resourceInstanceProfileCreate(d *schema.ResourceData, m interface{}) error {
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 	instanceProfileArn := d.Get("instance_profile_arn").(string)
 	skipValidation := d.Get("skip_validation").(bool)
 	err := client.InstanceProfiles().Create(instanceProfileArn, skipValidation)
@@ -48,7 +49,7 @@ func resourceInstanceProfileCreate(d *schema.ResourceData, m interface{}) error 
 
 func resourceInstanceProfileRead(d *schema.ResourceData, m interface{}) error {
 	id := d.Id()
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 	profile, err := client.InstanceProfiles().Read(id)
 	if err != nil {
 		if isInstanceProfileMissing(err.Error(), id) {
@@ -64,7 +65,7 @@ func resourceInstanceProfileRead(d *schema.ResourceData, m interface{}) error {
 
 func resourceInstanceProfileDelete(d *schema.ResourceData, m interface{}) error {
 	id := d.Id()
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 	err := client.InstanceProfiles().Delete(id)
 	return err
 }

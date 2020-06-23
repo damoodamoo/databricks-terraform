@@ -8,7 +8,7 @@ import (
 func dataSourceClusterZones() *schema.Resource {
 	return &schema.Resource{
 		Read: func(d *schema.ResourceData, m interface{}) error {
-			client := m.(service.DBApiClient)
+			client := m.(*service.DBApiClient)
 
 			zonesInfo, err := client.Clusters().ListZones()
 			if err != nil {
@@ -24,12 +24,12 @@ func dataSourceClusterZones() *schema.Resource {
 			return err
 		},
 		Schema: map[string]*schema.Schema{
-			"default_zone": &schema.Schema{
+			"default_zone": {
 				Type:     schema.TypeString,
 				Computed: true,
 				ForceNew: true,
 			},
-			"zones": &schema.Schema{
+			"zones": {
 				Type:     schema.TypeList,
 				Computed: true,
 				Elem:     &schema.Schema{Type: schema.TypeString},

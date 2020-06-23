@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -10,9 +11,12 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/go-querystring/query"
+	"github.com/hashicorp/go-retryablehttp"
 )
 
 // CloudServiceProvider is a custom type for different types of cloud service providers
@@ -53,6 +57,8 @@ const (
 	BasicAuth AuthType = "BASIC"
 )
 
+var clientAuthorizerMutex sync.Mutex
+
 // DBApiClientConfig is used to configure the DataBricks Client
 type DBApiClientConfig struct {
 	Host               string
@@ -62,22 +68,100 @@ type DBApiClientConfig struct {
 	DefaultHeaders     map[string]string
 	InsecureSkipVerify bool
 	TimeoutSeconds     int
-	client             http.Client
+	CustomAuthorizer   func(*DBApiClientConfig) error
+	client             *retryablehttp.Client
+}
+
+var transientErrorStringMatches []string = []string{ // TODO: Should we make these regexes to match more of the message or is this sufficient?
+	"com.databricks.backend.manager.util.UnknownWorkerEnvironmentException",
+	"does not have any associated worker environments",
+	"There is no worker environment with id",
 }
 
 // Setup initializes the client
 func (c *DBApiClientConfig) Setup() {
 	if c.TimeoutSeconds == 0 {
-		c.TimeoutSeconds = 10
+		c.TimeoutSeconds = 60
 	}
-	c.client = http.Client{
-		Timeout: time.Duration(time.Duration(c.TimeoutSeconds) * time.Second),
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: c.InsecureSkipVerify,
+	// Set up a retryable HTTP Client to handle cases where the service returns
+	// a transient error on initial creation
+	retryDelayDuration := 10 * time.Second
+	retryMaximumDuration := 5 * time.Minute
+	c.client = &retryablehttp.Client{
+		HTTPClient: &http.Client{
+			Timeout: time.Duration(c.TimeoutSeconds) * time.Second,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: c.InsecureSkipVerify,
+				},
 			},
 		},
+		CheckRetry: checkHTTPRetry,
+		// Using a linear retry rather than the default exponential retry
+		// as the creation condition is normally passed after 30-40 seconds
+		// Setting the retry interval to 10 seconds. Setting RetryWaitMin and RetryWaitMax
+		// to the same value removes jitter (which would be useful in a high-volume traffic scenario
+		// but wouldn't add much here)
+		Backoff:      retryablehttp.LinearJitterBackoff,
+		RetryWaitMin: retryDelayDuration,
+		RetryWaitMax: retryDelayDuration,
+		RetryMax:     int(retryMaximumDuration / retryDelayDuration),
 	}
+}
+
+// checkHTTPRetry inspects HTTP errors from the Databricks API for known transient errors on Workspace creation
+func checkHTTPRetry(ctx context.Context, resp *http.Response, err error) (bool, error) {
+	if resp == nil {
+		// If response is nil we can't make retry choices.
+		// In this case don't retry and return the original error from httpclient
+		return false, err
+	}
+	if resp.StatusCode >= 400 {
+		log.Printf("Failed request detected. Status Code: %v\n", resp.StatusCode)
+		// reading the body means that the caller cannot read it themselves
+		// But that's ok because we've hit an error case
+		// Our job now is to
+		//  - capture the error and return it
+		//  - determine if the error is retryable
+
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return false, err
+		}
+		var errorBody DBApiErrorBody
+		err = json.Unmarshal(body, &errorBody)
+		if err != nil {
+			return false, fmt.Errorf("Response from server (%d) %s: %v", resp.StatusCode, string(body), err)
+		}
+		dbAPIError := DBApiError{
+			ErrorBody:  &errorBody,
+			StatusCode: resp.StatusCode,
+			Err:        fmt.Errorf("Response from server %s", string(body)),
+		}
+		for _, substring := range transientErrorStringMatches {
+			if strings.Contains(errorBody.Message, substring) {
+				log.Println("Failed request detected: Retryable type found. Attempting retry...")
+				return true, dbAPIError
+			}
+		}
+		return false, dbAPIError
+	}
+	return false, nil
+}
+
+func (c *DBApiClientConfig) getOrCreateToken() error {
+	if c.CustomAuthorizer != nil {
+		// Lock incase terraform tries to getOrCreateToken from multiple go routines on the same client ptr.
+		clientAuthorizerMutex.Lock()
+		defer clientAuthorizerMutex.Unlock()
+		if reflect.ValueOf(c.Token).IsZero() {
+			log.Println("NOT AUTHORIZED SO ATTEMPTING TO AUTHORIZE")
+			return c.CustomAuthorizer(c)
+		}
+		log.Println("ALREADY AUTHORIZED")
+		return nil
+	}
+	return nil
 }
 
 func (c DBApiClientConfig) getAuthHeader() map[string]string {
@@ -91,7 +175,7 @@ func (c DBApiClientConfig) getAuthHeader() map[string]string {
 	return auth
 }
 
-func (c DBApiClientConfig) getUserAgentHeader() map[string]string {
+func (c *DBApiClientConfig) getUserAgentHeader() map[string]string {
 	if reflect.ValueOf(c.UserAgent).IsZero() {
 		return map[string]string{
 			"User-Agent": "databricks-go-client-sdk",
@@ -102,7 +186,7 @@ func (c DBApiClientConfig) getUserAgentHeader() map[string]string {
 	}
 }
 
-func (c DBApiClientConfig) getDefaultHeaders() map[string]string {
+func (c *DBApiClientConfig) getDefaultHeaders() map[string]string {
 	auth := c.getAuthHeader()
 	userAgent := c.getUserAgentHeader()
 
@@ -119,7 +203,7 @@ func (c DBApiClientConfig) getDefaultHeaders() map[string]string {
 	return defaultHeaders
 }
 
-func (c DBApiClientConfig) getRequestURI(path string, apiVersion string) (string, error) {
+func (c *DBApiClientConfig) getRequestURI(path string, apiVersion string) (string, error) {
 	var apiVersionString string
 	if apiVersion == "" {
 		apiVersionString = "2.0"
@@ -189,6 +273,9 @@ func PerformQuery(config *DBApiClientConfig, method, path string, apiVersion str
 		}
 	}
 	requestHeaders := config.getDefaultHeaders()
+	if config.client == nil {
+		config.Setup()
+	}
 
 	if len(headers) > 0 {
 		for k, v := range headers {
@@ -205,7 +292,6 @@ func PerformQuery(config *DBApiClientConfig, method, path string, apiVersion str
 		}
 		requestURL += "?" + params.Encode()
 		auditGetPayload(requestURL, secretsMask)
-
 	} else {
 		if marshalJSON {
 			bodyBytes, err := json.Marshal(data)
@@ -216,12 +302,11 @@ func PerformQuery(config *DBApiClientConfig, method, path string, apiVersion str
 			requestBody = bodyBytes
 		} else {
 			requestBody = []byte(data.(string))
-
 		}
 		auditNonGetPayload(method, requestURL, data, secretsMask)
 	}
 
-	request, err := http.NewRequest(method, requestURL, bytes.NewBuffer(requestBody))
+	request, err := retryablehttp.NewRequest(method, requestURL, bytes.NewBuffer(requestBody))
 	if err != nil {
 		return nil, err
 	}
@@ -244,19 +329,8 @@ func PerformQuery(config *DBApiClientConfig, method, path string, apiVersion str
 	if err != nil {
 		return nil, err
 	}
-
-	if resp.StatusCode >= 400 {
-		var errorBody DBApiErrorBody
-		err = json.Unmarshal(body, &errorBody)
-		if err != nil {
-			return nil, fmt.Errorf("Response from server (%d) %s", resp.StatusCode, string(body))
-		}
-		return nil, DBApiError{
-			ErrorBody:  &errorBody,
-			StatusCode: resp.StatusCode,
-			Err:        fmt.Errorf("Response from server %s", string(body)),
-		}
-	}
+	// Don't need to check the status code here as the RetryCheck for
+	// retryablehttp.Client is doing that and returning an error
 
 	return body, nil
 }

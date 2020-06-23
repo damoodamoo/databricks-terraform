@@ -8,7 +8,7 @@ import (
 func dataSourceDefaultUserRoles() *schema.Resource {
 	return &schema.Resource{
 		Read: func(d *schema.ResourceData, m interface{}) error {
-			client := m.(service.DBApiClient)
+			client := m.(*service.DBApiClient)
 
 			defaultRolesUserName := d.Get("default_username").(string)
 			metaUser, err := client.Users().GetOrCreateDefaultMetaUser(defaultRolesUserName, defaultRolesUserName, true)
@@ -25,12 +25,12 @@ func dataSourceDefaultUserRoles() *schema.Resource {
 			return err
 		},
 		Schema: map[string]*schema.Schema{
-			"default_username": &schema.Schema{
+			"default_username": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
 			},
-			"roles": &schema.Schema{
+			"roles": {
 				Type:     schema.TypeList,
 				Computed: true,
 				Elem:     &schema.Schema{Type: schema.TypeString},

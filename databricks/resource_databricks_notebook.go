@@ -7,10 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/databrickslabs/databricks-terraform/client/model"
-	"github.com/databrickslabs/databricks-terraform/client/service"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 	"hash/crc32"
 	"io"
 	"log"
@@ -18,6 +14,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/databrickslabs/databricks-terraform/client/model"
+	"github.com/databrickslabs/databricks-terraform/client/service"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/validation"
 )
 
 func resourceNotebook() *schema.Resource {
@@ -27,7 +28,7 @@ func resourceNotebook() *schema.Resource {
 		Delete: resourceNotebookDelete,
 
 		Schema: map[string]*schema.Schema{
-			"content": &schema.Schema{
+			"content": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
@@ -35,17 +36,18 @@ func resourceNotebook() *schema.Resource {
 					base64String := i.(string)
 					base64, err := convertBase64ToCheckSum(base64String)
 					if err != nil {
-						panic(err)
+						return ""
 					}
 					return base64
 				},
+				ValidateFunc: validation.StringIsBase64,
 			},
-			"path": &schema.Schema{
+			"path": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
 			},
-			"language": &schema.Schema{
+			"language": {
 				Type:     schema.TypeString,
 				Optional: true,
 				ForceNew: true,
@@ -56,34 +58,35 @@ func resourceNotebook() *schema.Resource {
 					string(model.SQL),
 				}, false),
 			},
-			"overwrite": &schema.Schema{
+			"overwrite": {
 				Type:     schema.TypeBool,
 				Optional: true,
 				Default:  false,
 				ForceNew: true,
 			},
-			"mkdirs": &schema.Schema{
+			"mkdirs": {
 				Type:     schema.TypeBool,
 				Optional: true,
 				Default:  true,
 				ForceNew: true,
 			},
-			"format": &schema.Schema{
+			"format": {
 				Type:     schema.TypeString,
 				Optional: true,
 				Default:  string(model.Source),
 				ForceNew: true,
 				ValidateFunc: validation.StringInSlice([]string{
 					string(model.DBC),
+					string(model.Jupyter),
 					string(model.Source),
 					string(model.HTML),
 				}, false),
 			},
-			"object_type": &schema.Schema{
+			"object_type": {
 				Type:     schema.TypeString,
 				Computed: true,
 			},
-			"object_id": &schema.Schema{
+			"object_id": {
 				Type:     schema.TypeInt,
 				Computed: true,
 			},
@@ -92,7 +95,7 @@ func resourceNotebook() *schema.Resource {
 }
 
 func resourceNotebookCreate(d *schema.ResourceData, m interface{}) error {
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 	path := d.Get("path").(string)
 	content := d.Get("content").(string)
 	language := d.Get("language").(string)
@@ -134,7 +137,7 @@ func resourceNotebookCreate(d *schema.ResourceData, m interface{}) error {
 
 func resourceNotebookRead(d *schema.ResourceData, m interface{}) error {
 	id := d.Id()
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 	format := d.Get("format").(string)
 	notebookData, err := client.Notebooks().Export(id, model.ExportFormat(format))
 	if err != nil {
@@ -177,7 +180,7 @@ func resourceNotebookRead(d *schema.ResourceData, m interface{}) error {
 
 func resourceNotebookDelete(d *schema.ResourceData, m interface{}) error {
 	id := d.Id()
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 	err := client.Notebooks().Delete(id, true)
 	return err
 }
@@ -185,6 +188,7 @@ func resourceNotebookDelete(d *schema.ResourceData, m interface{}) error {
 func convertBase64ToCheckSum(b64 string) (string, error) {
 	dataArr, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
+		log.Printf("Error while trying to decode base64 content: %v\n", err)
 		return "error", err
 	}
 	checksum, err := convertZipBytesToCRC(dataArr)
@@ -192,7 +196,6 @@ func convertBase64ToCheckSum(b64 string) (string, error) {
 		return strconv.Itoa(int(crc32.ChecksumIEEE(dataArr))), nil
 	}
 	return checksum, nil
-
 }
 
 func convertZipBytesToCRC(b64 []byte) (string, error) {
@@ -217,7 +220,7 @@ func convertZipBytesToCRC(b64 []byte) (string, error) {
 	return strconv.Itoa(int(totalSum)), nil
 }
 
-func getDBCCheckSumForCommands(fileIO io.ReadCloser) (int, error) {
+func getDBCCheckSumForCommands(fileIO io.Reader) (int, error) {
 	var stringBuff bytes.Buffer
 	scanner := bufio.NewScanner(fileIO)
 	buf := make([]byte, 0, 64*1024)

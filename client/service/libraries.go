@@ -2,13 +2,14 @@ package service
 
 import (
 	"encoding/json"
-	"github.com/databrickslabs/databricks-terraform/client/model"
 	"net/http"
+
+	"github.com/databrickslabs/databricks-terraform/client/model"
 )
 
 // LibrariesAPI exposes the Library API
 type LibrariesAPI struct {
-	Client DBApiClient
+	Client *DBApiClient
 }
 
 // Create installs the list of libraries given a cluster id

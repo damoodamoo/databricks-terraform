@@ -9,17 +9,17 @@ func dataSourceDBFSFilePaths() *schema.Resource {
 	return &schema.Resource{
 		Read: dataSourceDBFSFilePathsRead,
 		Schema: map[string]*schema.Schema{
-			"path": &schema.Schema{
+			"path": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
 			},
-			"recursive": &schema.Schema{
+			"recursive": {
 				Type:     schema.TypeBool,
 				Required: true,
 				ForceNew: true,
 			},
-			"path_list": &schema.Schema{
+			"path_list": {
 				Type:     schema.TypeSet,
 				Computed: true,
 				Elem: &schema.Resource{
@@ -43,7 +43,7 @@ func dataSourceDBFSFilePaths() *schema.Resource {
 func dataSourceDBFSFilePathsRead(d *schema.ResourceData, m interface{}) error {
 	path := d.Get("path").(string)
 	recursive := d.Get("recursive").(bool)
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 
 	paths, err := client.DBFS().List(path, recursive)
 	if err != nil {

@@ -2,13 +2,14 @@ package service
 
 import (
 	"encoding/json"
-	"github.com/databrickslabs/databricks-terraform/client/model"
 	"net/http"
+
+	"github.com/databrickslabs/databricks-terraform/client/model"
 )
 
 // SecretAclsAPI exposes the Secret ACL API
 type SecretAclsAPI struct {
-	Client DBApiClient
+	Client *DBApiClient
 }
 
 // Create creates or overwrites the ACL associated with the given principal (user or group) on the specified scope point

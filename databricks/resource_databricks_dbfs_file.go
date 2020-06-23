@@ -2,11 +2,12 @@ package databricks
 
 import (
 	"fmt"
-	"github.com/databrickslabs/databricks-terraform/client/service"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 	"log"
 	"path/filepath"
 	"strings"
+
+	"github.com/databrickslabs/databricks-terraform/client/service"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
 
 func resourceDBFSFile() *schema.Resource {
@@ -17,31 +18,31 @@ func resourceDBFSFile() *schema.Resource {
 		Update: resourceDBFSFileUpdate,
 
 		Schema: map[string]*schema.Schema{
-			"content": &schema.Schema{
+			"content": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
 			},
-			"path": &schema.Schema{
+			"path": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
 			},
-			"overwrite": &schema.Schema{
+			"overwrite": {
 				Type:     schema.TypeBool,
 				Optional: true,
 				Default:  false,
 			},
-			"mkdirs": &schema.Schema{
+			"mkdirs": {
 				Type:     schema.TypeBool,
 				Optional: true,
 				Default:  true,
 			},
-			"validate_remote_file": &schema.Schema{
+			"validate_remote_file": {
 				Type:     schema.TypeBool,
 				Optional: true,
 			},
-			"file_size": &schema.Schema{
+			"file_size": {
 				Type:     schema.TypeInt,
 				Computed: true,
 			},
@@ -50,7 +51,7 @@ func resourceDBFSFile() *schema.Resource {
 }
 
 func resourceDBFSFileCreate(d *schema.ResourceData, m interface{}) error {
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 	path := d.Get("path").(string)
 	content := d.Get("content").(string)
 	overwrite := d.Get("overwrite").(bool)
@@ -88,7 +89,7 @@ func resourceDBFSFileCreate(d *schema.ResourceData, m interface{}) error {
 
 func resourceDBFSFileRead(d *schema.ResourceData, m interface{}) error {
 	id := d.Id()
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 
 	fileInfo, err := client.DBFS().Status(id)
 	if err != nil {
@@ -139,7 +140,7 @@ func resourceDBFSFileUpdate(d *schema.ResourceData, m interface{}) error {
 }
 func resourceDBFSFileDelete(d *schema.ResourceData, m interface{}) error {
 	id := d.Id()
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 	err := client.DBFS().Delete(id, false)
 	return err
 }

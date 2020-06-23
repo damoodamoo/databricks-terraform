@@ -9,22 +9,22 @@ func dataSourceDBFSFile() *schema.Resource {
 	return &schema.Resource{
 		Read: dataSourceDBFSFileRead,
 		Schema: map[string]*schema.Schema{
-			"path": &schema.Schema{
+			"path": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
 			},
-			"limit_file_size": &schema.Schema{
+			"limit_file_size": {
 				Type:     schema.TypeBool,
 				Required: true,
 				ForceNew: true,
 			},
-			"content": &schema.Schema{
+			"content": {
 				Type:     schema.TypeString,
 				Computed: true,
 				ForceNew: true,
 			},
-			"file_size": &schema.Schema{
+			"file_size": {
 				Type:     schema.TypeInt,
 				Computed: true,
 			},
@@ -35,7 +35,7 @@ func dataSourceDBFSFile() *schema.Resource {
 func dataSourceDBFSFileRead(d *schema.ResourceData, m interface{}) error {
 	path := d.Get("path").(string)
 	limitFileSize := d.Get("limit_file_size").(bool)
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 
 	fileInfo, err := client.DBFS().Status(path)
 	if err != nil {

@@ -3,15 +3,16 @@ package service
 import (
 	"encoding/json"
 	"errors"
-	"github.com/databrickslabs/databricks-terraform/client/model"
 	"log"
 	"net/http"
 	"time"
+
+	"github.com/databrickslabs/databricks-terraform/client/model"
 )
 
 // ClustersAPI is a struct that contains the Databricks api client to perform queries
 type ClustersAPI struct {
-	Client DBApiClient
+	Client *DBApiClient
 }
 
 // Create creates a new Spark cluster

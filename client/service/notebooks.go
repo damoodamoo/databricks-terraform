@@ -2,13 +2,14 @@ package service
 
 import (
 	"encoding/json"
-	"github.com/databrickslabs/databricks-terraform/client/model"
 	"net/http"
+
+	"github.com/databrickslabs/databricks-terraform/client/model"
 )
 
 // NotebooksAPI exposes the Notebooks API
 type NotebooksAPI struct {
-	Client DBApiClient
+	Client *DBApiClient
 }
 
 // Create creates a notebook given the content and path

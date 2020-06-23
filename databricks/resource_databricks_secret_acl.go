@@ -2,11 +2,12 @@ package databricks
 
 import (
 	"fmt"
+	"log"
+	"strings"
+
 	"github.com/databrickslabs/databricks-terraform/client/model"
 	"github.com/databrickslabs/databricks-terraform/client/service"
 	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
-	"log"
-	"strings"
 )
 
 func resourceSecretACL() *schema.Resource {
@@ -16,17 +17,17 @@ func resourceSecretACL() *schema.Resource {
 		Delete: resourceSecretACLDelete,
 
 		Schema: map[string]*schema.Schema{
-			"scope": &schema.Schema{
+			"scope": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
 			},
-			"principal": &schema.Schema{
+			"principal": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
 			},
-			"permission": &schema.Schema{
+			"permission": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
@@ -39,12 +40,12 @@ func getSecretACLID(scope string, key string) (string, error) {
 	return scope + "|||" + key, nil
 }
 
-func getScopeAndKeyFromSecretACLID(SecretACLIDString string) (string, string, error) {
-	return strings.Split(SecretACLIDString, "|||")[0], strings.Split(SecretACLIDString, "|||")[1], nil
+func getScopeAndKeyFromSecretACLID(secretACLIDString string) (string, string, error) {
+	return strings.Split(secretACLIDString, "|||")[0], strings.Split(secretACLIDString, "|||")[1], nil
 }
 
 func resourceSecretACLCreate(d *schema.ResourceData, m interface{}) error {
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 	scopeName := d.Get("scope").(string)
 	principal := d.Get("principal").(string)
 	permission := model.ACLPermission(d.Get("permission").(string))
@@ -66,7 +67,7 @@ func resourceSecretACLRead(d *schema.ResourceData, m interface{}) error {
 	if err != nil {
 		return err
 	}
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 	secretACL, err := client.SecretAcls().Read(scope, principal)
 	if err != nil {
 		if isSecretACLMissing(err.Error(), scope, principal) {
@@ -89,7 +90,7 @@ func resourceSecretACLRead(d *schema.ResourceData, m interface{}) error {
 }
 
 func resourceSecretACLDelete(d *schema.ResourceData, m interface{}) error {
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 	id := d.Id()
 	scope, key, err := getScopeAndKeyFromSecretACLID(id)
 	if err != nil {

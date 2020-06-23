@@ -2,10 +2,11 @@ package databricks
 
 import (
 	"fmt"
-	"github.com/databrickslabs/databricks-terraform/client/service"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 	"log"
 	"strings"
+
+	"github.com/databrickslabs/databricks-terraform/client/service"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
 
 func resourceSecretScope() *schema.Resource {
@@ -15,18 +16,18 @@ func resourceSecretScope() *schema.Resource {
 		Delete: resourceSecretScopeDelete,
 
 		Schema: map[string]*schema.Schema{
-			"name": &schema.Schema{
+			"name": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
 			},
-			"initial_manage_principal": &schema.Schema{
+			"initial_manage_principal": {
 				Type:     schema.TypeString,
 				Optional: true,
 				ForceNew: true,
-				Default:  nil,
+				Default:  "users",
 			},
-			"backend_type": &schema.Schema{
+			"backend_type": {
 				Type:     schema.TypeString,
 				Computed: true,
 			},
@@ -35,7 +36,7 @@ func resourceSecretScope() *schema.Resource {
 }
 
 func resourceSecretScopeCreate(d *schema.ResourceData, m interface{}) error {
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 	scopeName := d.Get("name").(string)
 	initialManagePrincipal := d.Get("initial_manage_principal").(string)
 	err := client.SecretScopes().Create(scopeName, initialManagePrincipal)
@@ -47,7 +48,7 @@ func resourceSecretScopeCreate(d *schema.ResourceData, m interface{}) error {
 }
 
 func resourceSecretScopeRead(d *schema.ResourceData, m interface{}) error {
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 	id := d.Id()
 	scope, err := client.SecretScopes().Read(id)
 	if err != nil {
@@ -68,7 +69,7 @@ func resourceSecretScopeRead(d *schema.ResourceData, m interface{}) error {
 }
 
 func resourceSecretScopeDelete(d *schema.ResourceData, m interface{}) error {
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 	id := d.Id()
 	err := client.SecretScopes().Delete(id)
 	return err

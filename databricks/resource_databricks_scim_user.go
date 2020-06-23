@@ -2,13 +2,14 @@ package databricks
 
 import (
 	"fmt"
-	"github.com/databrickslabs/databricks-terraform/client/model"
-	"github.com/databrickslabs/databricks-terraform/client/service"
-	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 	"log"
 	"reflect"
 	"sort"
 	"strings"
+
+	"github.com/databrickslabs/databricks-terraform/client/model"
+	"github.com/databrickslabs/databricks-terraform/client/service"
+	"github.com/hashicorp/terraform-plugin-sdk/helper/schema"
 )
 
 func resourceScimUser() *schema.Resource {
@@ -19,41 +20,41 @@ func resourceScimUser() *schema.Resource {
 		Delete: resourceScimUserDelete,
 
 		Schema: map[string]*schema.Schema{
-			"user_name": &schema.Schema{
+			"user_name": {
 				Type:     schema.TypeString,
 				Required: true,
 				ForceNew: true,
 			},
-			"display_name": &schema.Schema{
+			"display_name": {
 				Type:     schema.TypeString,
 				Optional: true,
 			},
-			"roles": &schema.Schema{
+			"roles": {
 				Type:       schema.TypeSet,
 				Optional:   true,
 				ConfigMode: schema.SchemaConfigModeAttr,
 				Elem:       &schema.Schema{Type: schema.TypeString},
 				Set:        schema.HashString,
 			},
-			"entitlements": &schema.Schema{
+			"entitlements": {
 				Type:     schema.TypeSet,
 				Optional: true,
 				Elem:     &schema.Schema{Type: schema.TypeString},
 				Set:      schema.HashString,
 			},
-			"inherited_roles": &schema.Schema{
+			"inherited_roles": {
 				Type:     schema.TypeSet,
 				Computed: true,
 				Elem:     &schema.Schema{Type: schema.TypeString},
 				Set:      schema.HashString,
 			},
-			"default_roles": &schema.Schema{
+			"default_roles": {
 				Type:     schema.TypeSet,
 				Required: true,
 				Elem:     &schema.Schema{Type: schema.TypeString},
 				Set:      schema.HashString,
 			},
-			"set_admin": &schema.Schema{
+			"set_admin": {
 				Type:     schema.TypeBool,
 				Optional: true,
 				Default:  false,
@@ -73,7 +74,7 @@ func convertInterfaceSliceToStringSlice(input []interface{}) []string {
 }
 
 func resourceScimUserCreate(d *schema.ResourceData, m interface{}) error {
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 	userName := d.Get("user_name").(string)
 	setAdmin := d.Get("set_admin").(bool)
 	var displayName string
@@ -94,6 +95,14 @@ func resourceScimUserCreate(d *schema.ResourceData, m interface{}) error {
 	if err != nil {
 		return err
 	}
+
+	// Hack to fix user, for some reason if entitlements is empty it will auto create user with
+	// allow-cluster-create permissions so we will apply a put operation to overwrite the user
+	err = client.Users().Update(user.ID, userName, displayName, entitlements, roles)
+	if err != nil {
+		return err
+	}
+
 	if setAdmin {
 		adminGroup, err := client.Groups().GetAdminGroup()
 		if err != nil {
@@ -119,7 +128,7 @@ func getListOfRoles(roleList []model.RoleListItem) []string {
 
 func resourceScimUserRead(d *schema.ResourceData, m interface{}) error {
 	id := d.Id()
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 	user, err := client.Users().Read(id)
 	if err != nil {
 		if isScimUserMissing(err.Error(), id) {
@@ -143,7 +152,6 @@ func resourceScimUserRead(d *schema.ResourceData, m interface{}) error {
 		return err
 	}
 
-	roles := getListOfRoles(user.Roles)
 	//entitlements := getListOfEntitlements(user.Entitlements)
 	var entitlements []string
 	for _, entitlement := range user.Entitlements {
@@ -159,6 +167,7 @@ func resourceScimUserRead(d *schema.ResourceData, m interface{}) error {
 		return err
 	}
 
+	roles := getListOfRoles(user.Roles)
 	inheritedRoles := getListOfRoles(user.InheritedRoles)
 	err = d.Set("inherited_roles", inheritedRoles)
 	if err != nil {
@@ -192,7 +201,7 @@ func resourceScimUserRead(d *schema.ResourceData, m interface{}) error {
 
 func resourceScimUserUpdate(d *schema.ResourceData, m interface{}) error {
 	id := d.Id()
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 	userName := d.Get("user_name").(string)
 	var displayName string
 	var roles []string
@@ -201,7 +210,6 @@ func resourceScimUserUpdate(d *schema.ResourceData, m interface{}) error {
 		displayName = rDisplayName.(string)
 	}
 	if rRoles, ok := d.GetOk("roles"); ok {
-
 		roles = convertInterfaceSliceToStringSlice(rRoles.(*schema.Set).List())
 	}
 	if rEntitlements, ok := d.GetOk("entitlements"); ok {
@@ -238,7 +246,7 @@ func resourceScimUserUpdate(d *schema.ResourceData, m interface{}) error {
 
 func resourceScimUserDelete(d *schema.ResourceData, m interface{}) error {
 	id := d.Id()
-	client := m.(service.DBApiClient)
+	client := m.(*service.DBApiClient)
 	err := client.Users().Delete(id)
 	return err
 }

@@ -31,8 +31,10 @@ resource "databricks_scim_user" "my-user" {
 ``` hcl
 provider "databricks" {
   host          = "http://databricks.domain.com"
-  token         = base64encode("${var.user}:${var.password}")
-  auth_type     = "BASIC"
+  basic_auth {
+    username = var.user
+    password = var.password
+  }
 }
 
 resource "databricks_scim_user" "my-user" {
@@ -41,6 +43,19 @@ resource "databricks_scim_user" "my-user" {
 }
 ```
 {{% /tab %}}
+ {{% tab name="Profile" %}}
+``` hcl
+provider "databricks" {
+  config_file = "~/.databrickscfg"
+  profile     = "DEFAULT"
+}
+
+resource "databricks_scim_user" "my-user" {
+  user_name     = "test-user@databricks.com"
+  display_name  = "Test User"
+}
+```
+ {{% /tab %}}
  {{% tab name="Azure SP Auth" %}}
 ``` hcl
 provider "azurerm" {
@@ -137,10 +152,17 @@ The following variables can be passed via environment variables:
 
 * `host` → `DATABRICKS_HOST`
 * `token` → `DATABRICKS_TOKEN`
-* `subscription_id` → `DATABRICKS_AZURE_SUBSCRIPTION_ID`
-* `client_secret` → `DATABRICKS_AZURE_CLIENT_SECRET`
-* `client_id` → `DATABRICKS_AZURE_CLIENT_ID`
-* `tenant_id` → `DATABRICKS_AZURE_TENANT_ID`
+* `basic_auth.username` → `DATABRICKS_USERNAME`
+* `basic_auth.password` → `DATABRICKS_PASSWORD`
+* `config_file` → `DATABRICKS_CONFIG_FILE`
+* `managed_resource_group` → `DATABRICKS_AZURE_MANAGED_RESOURCE_GROUP`
+* `azure_region` → `AZURE_REGION`
+* `workspace_name` → `DATABRICKS_AZURE_WORKSPACE_NAME`
+* `resource_group` → `DATABRICKS_AZURE_RESOURCE_GROUP`
+* `subscription_id` → `DATABRICKS_AZURE_SUBSCRIPTION_ID` or `ARM_SUBSCRIPTION_ID`
+* `client_secret` → `DATABRICKS_AZURE_CLIENT_SECRET` or `ARM_CLIENT_SECRET`
+* `client_id` → `DATABRICKS_AZURE_CLIENT_ID` or `ARM_CLIENT_ID`
+* `tenant_id` → `DATABRICKS_AZURE_TENANT_ID` or `ARM_TENANT_ID`
 
 For example you can have the following provider definition:
 
@@ -168,7 +190,38 @@ Alternatively you can provide this value as an environment variable `DATABRICKS_
 > This is the api token to authenticate into the workspace. Alternatively you can provide this value as an 
 environment variable `DATABRICKS_TOKEN`. 
 
-#### `azure-auth`:
+#### `basic_auth`:
+> #### **Usage**
+>```hcl
+>basic_auth = {
+>    username = "user"
+>    password = "mypass-123"
+>}
+>```
+> {{%chevron default=`This is the authentication required to authenticate to the Databricks via basic auth through a user 
+ that has access to the workspace. This is optional as you can use the api token based auth. 
+The basic_auth block contains the following arguments:` display="true" %}}
+
+* `username` - This is the username of the user that can log into the workspace. 
+Alternatively you can provide this value as an environment variable `DATABRICKS_USERNAME`.
+
+* `password` - This is the password of the user that can log into the workspace.
+Alternatively you can provide this value as an environment variable `DATABRICKS_PASSWORD`.
+{{% /chevron %}}
+
+#### `config_file`:
+> Location of the Databricks CLI credentials file, that is created, by `databricks configure --token` command. 
+>By default, it is located in ~/.databrickscfg. Check https://docs.databricks.com/dev-tools/cli/index.html#set-up-authentication 
+>for docs. Config file credentials will only be used when host/token/basic_auth/azure_auth are not provided. 
+>Alternatively you can provide this value as an environment variable `DATABRICKS_CONFIG_FILE`. This field defaults to 
+>`~/.databrickscfg`. 
+
+#### `profile`:
+> Connection profile specified within ~/.databrickscfg. Please check 
+>https://docs.databricks.com/dev-tools/cli/index.html#connection-profiles for documentation. This field defaults to 
+>`DEFAULT`.
+
+#### `azure_auth`:
 > #### **Usage**
 >```hcl
 >azure_auth = {
@@ -186,25 +239,31 @@ environment variable `DATABRICKS_TOKEN`.
 principal that has access to the workspace. This is optional as you can use the api token based auth. 
 The azure_auth block contains the following arguments:` display="true" %}}
 
-* `managed_resource_group` - This is the managed workgroup id when the Databricks workspace is provisioned
+* `managed_resource_group` - This is the managed workgroup id when the Databricks workspace is provisioned. 
+Alternatively you can provide this value as an environment variable `DATABRICKS_AZURE_MANAGED_RESOURCE_GROUP`.
 
 * `azure_region` - This is the azure region in which your workspace is deployed.
+Alternatively you can provide this value as an environment variable `AZURE_REGION`.
 
 * `workspace_name` - This is the name of your Azure Databricks Workspace.
+Alternatively you can provide this value as an environment variable `DATABRICKS_AZURE_WORKSPACE_NAME`.
 
 * `resource_group` - This is the resource group in which your Azure Databricks Workspace resides in.
+Alternatively you can provide this value as an environment variable `DATABRICKS_AZURE_RESOURCE_GROUP`.
 
 * `subscription_id` - This is the Azure Subscription id in which your Azure Databricks Workspace resides in. 
-Alternatively you can provide this value as an environment variable `DATABRICKS_AZURE_SUBSCRIPTION_ID`.
+Alternatively you can provide this value as an environment variable `DATABRICKS_AZURE_SUBSCRIPTION_ID` or `ARM_SUBSCRIPTION_ID`.
                                                                               
 * `client_secret` - This is the Azure Enterprise Application (Service principal) client secret. This service 
 principal requires contributor access to your Azure Databricks deployment. Alternatively you can provide this 
-value as an environment variable `DATABRICKS_AZURE_CLIENT_SECRET`.  
+value as an environment variable `DATABRICKS_AZURE_CLIENT_SECRET` or `ARM_CLIENT_SECRET`.
 
 * `client_id` - This is the Azure Enterprise Application (Service principal) client id. This service principal 
 requires contributor access to your Azure Databricks deployment. Alternatively you can provide this value as an 
-environment variable `DATABRICKS_AZURE_CLIENT_ID`.  
+environment variable `DATABRICKS_AZURE_CLIENT_ID` or `ARM_CLIENT_ID`.
 
 * `tenant_id` - This is the Azure Active Directory Tenant id in which the Enterprise Application (Service Principal) 
-resides in. Alternatively you can provide this value as an environment variable `DATABRICKS_AZURE_TENANT_ID`.  
+resides in. Alternatively you can provide this value as an environment variable `DATABRICKS_AZURE_TENANT_ID` or `ARM_TENANT_ID`.
+
+Where there are multiple environment variable options, the `DATABRICKS_AZURE_*` environment variables takes precedence and the `ARM_*` environment variables provide a way to share authentication configuration when using the `databricks-terraform` provider alongside the `azurerm` provider.
 {{% /chevron %}}
